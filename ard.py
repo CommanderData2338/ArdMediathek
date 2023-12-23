@@ -90,7 +90,7 @@ def dateTime2(dt):
             a = time.localtime(a)
             s += "\nVerfügbar bis %s" % "{0:02d}.{1:02d}.{2:04d} {3:02d}:{4:02d}".format(a.tm_mday, a.tm_mon, a.tm_year, a.tm_hour, a.tm_min)
         return ensure_str(s)
-    except (TypeError, ValueError, AttributeError):
+    except (TypeError, ValueError, AttributeError, OverflowError):
         return ""
 
 
