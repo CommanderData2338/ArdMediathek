@@ -6,8 +6,8 @@ import xml.etree.ElementTree as Et
 import time
 import re
 import requests
+import skin
 from Components.ActionMap import ActionMap
-from Components.AVSwitch import AVSwitch
 from Components.ConfigList import ConfigListScreen
 from Components.config import config, getConfigListEntry, ConfigSubsection, ConfigDirectory, ConfigSelection, ConfigYesNo, configfile
 from Components.FileList import FileList
@@ -17,7 +17,7 @@ from Components.ScrollLabel import ScrollLabel
 from Components.Sources.StaticText import StaticText
 from Components.Sources.List import List
 from enigma import eServiceReference, ePicLoad, gPixmapPtr, getDesktop, addFont
-from Screens.InfoBarGenerics import setResumePoint
+from Screens import InfoBarGenerics
 from Screens.InfoBar import MoviePlayer
 from Screens.Screen import Screen
 from Screens.ChoiceBox import ChoiceBox
@@ -38,7 +38,7 @@ PLUGINPATH = "/usr/lib/enigma2/python/Plugins/Extensions/ArdMediathek/"
 RegionList = [("bw", ("Baden-Württemberg (SWR)")), ("by", ("Bayern (BR)")), ("be", ("Berlin (rbb)")), ("bb", ("Brandenburg (rbb)")), ("hb", ("Bremen (radiobremen)")), ("hh", ("Hamburg (NDR)")), ("he", ("Hessen (hr)")), ("mv", ("Mecklenburg-Vorpommern (NDR)")), ("ni", ("Niedersachsen (NDR)")), ("nw", ("Nordrhein-Westfalen (WDR)")), ("rp", ("Rheinland-Pfalz (SWR)")), ("sl", ("Saarland (SR)")), ("sn", ("Sachsen (mdr)")), ("st", ("Sachsen-Anhalt (mdr)")), ("sh", ("Schleswig-Holstein (NDR)")), ("th", ("Thüringen (mdr)"))]
 config.plugins.ARD.Region = ConfigSelection(default="nw", choices=RegionList)
 FHD = getDesktop(0).size().height() > 720
-UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/111.0"
+UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0"
 TMPIC = "/tmp/cover/bild.jpg"
 SKINFILE = PLUGINPATH + "skin_FHD.xml" if FHD else PLUGINPATH + "skin_HD.xml"
 FONT = "/usr/share/fonts/LiberationSans-Regular.ttf"
@@ -48,22 +48,24 @@ addFont(FONT, "SRegular", 100, False)
 API_URL = "https://api.ardmediathek.de/page-gateway/"
 URL_HOME = API_URL + "pages/%s/home?embedded=true"
 URL_AZ = API_URL + "pages/%s/editorial/experiment-a-z?embedded=true"
-ColorList = [("default,#1a104485,#3D104485,#1aC0C0C0", "Trans-BrightBlue"), ("default,#050a1232,#1502050e,#05192d7c", "Trans-DarkBlue"), ("default,#05000000,#15000000,#606060", "Trans-BlackGray"), ("default,#05000000,#15000000,#ffff00", "Trans-BlackYellow"), ("default,#1a746962,#1502050e,#1a746962", "Trans-BrownBlue"), ("MiniTV,#104485,#0c366a,#C0C0C0", "BrightBlue MiniTV"), ("MiniTV,#0a1232,#02050e,#192d7c", "DarkBlue MiniTV"), ("MiniTV,#000000,#080808,#606060", "BlackGray MiniTV"), ("MiniTV,#000000,#080808,#ffff00", "BlackYellow MiniTV"), ("MiniTV,#746962,#02050e,#746962", "BrownBlue MiniTV")]
-config.plugins.ARD.SkinColor = ConfigSelection(default="default,#050a1232,#1502050e,#05192d7c", choices=ColorList)
+ColorList = [("glass,#40000000,#5a000000,#37cccccc", "Black Glass"), ("glass,#5a082567,#5a000000,#37cccccc", "SapphireBlue Glass"), ("glass,#5a080828,#5a000000,#37cccccc", "MagentaBlue Glass"), ("glass,#e615d7b6,#5a000000,#37cccccc", "PaleGreen Glass"), ("glass,#5aa0785a,#5a000000,#37cccccc", "Chamoisee Glass"), ("transparent,#050a1232,#1502050e,#05192d7c", "DarkBlue Transparent"), ("transparent,#05000000,#15000000,#606060", "BlackGray Transparent"), ("transparent,#05000000,#15000000,#ffff00", "BlackYellow Transparent"), ("transparent,#1a104485,#3D104485,#1aC0C0C0", "BrightBlue Transparent"), ("transparent,#1a746962,#1502050e,#1a746962", "BrownBlue Transparent"), ("MiniTV,#104485,#0c366a,#C0C0C0", "BrightBlue MiniTV"), ("MiniTV,#0a1232,#02050e,#192d7c", "DarkBlue MiniTV"), ("MiniTV,#000000,#080808,#606060", "BlackGray MiniTV"), ("MiniTV,#000000,#080808,#ffff00", "BlackYellow MiniTV"), ("MiniTV,#746962,#02050e,#746962", "BrownBlue MiniTV")]
+config.plugins.ARD.SkinColor = ConfigSelection(default="glass,#5a082567,#5a000000,#37cccccc", choices=ColorList)
 
 
 def readskin():
     cf = config.plugins.ARD.SkinColor.value.split(",")
-    skin = ""
+    s = ""
     try:
         with open(SKINFILE, "r") as f:
             root = Et.parse(f).getroot()
         for element in root:
             if element.tag == "screen" and element.attrib["name"] == cf[0]:
-                skin = ensure_str(Et.tostring(element))
+                s = ensure_str(Et.tostring(element))
+        if hasattr(skin.AttributeParser, "scrollbarForegroundColor"):
+            s = s.replace("scrollbarSliderForegroundColor", "scrollbarForegroundColor")
     except (IOError, Et.ParseError):
         return ""
-    return skin.strip().replace("{col1}", cf[1]).replace("{col2}", cf[2]).replace("{col3}", cf[3]).replace("{picpath}", PLUGINPATH + "img/")
+    return s.strip().replace("{col1}", cf[1]).replace("{col2}", cf[2]).replace("{col3}", cf[3]).replace("{picpath}", PLUGINPATH + "img/")
 
 
 def geturl(url):
@@ -100,16 +102,16 @@ def sortList(txt):
 
 class ArdMediathek(Screen):
     def __init__(self, session):
-        skin = readskin()
-        self.skin = skin
+        s = readskin()
+        self.skin = s
         Screen.__init__(self, session)
-        self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "DirectionActions", "ChannelSelectBaseActions", "MovieSelectionActions"], {"contextMenu": self.ARDSetup, "green": self.Download, "red": self.close, "blue": self.Home, "up": self.up, "down": self.down, "left": self.left, "right": self.right, "nextBouquet": self.p_up, "prevBouquet": self.p_down, "ok": self.ok, "cancel": self.exit}, -1)
+        self["actions"] = ActionMap(["OkCancelActions", "ColorActions", "DirectionActions", "ChannelSelectBaseActions", "MenuActions"], {"menu": self.ARDSetup, "green": self.Download, "red": self.close, "blue": self.Home, "up": self.up, "down": self.down, "left": self.left, "right": self.right, "nextBouquet": self.p_up, "prevBouquet": self.p_down, "ok": self.ok, "cancel": self.exit}, -1)
         self["movielist"] = List()
         self["cover"] = Pixmap()
         self["handlung"] = ScrollLabel()
         self.HISTORY = [("MENU", "")]
         self["DownloadLabel"] = ScrollLabel()
-        self["PluginName"] = ScrollLabel("ARD Mediathek v1.5")
+        self["PluginName"] = ScrollLabel("ARD Mediathek v1.6")
         self["progress"] = ProgressBar()
         self["progress"].hide()
         self.PROGRAMM = "ard"
@@ -304,7 +306,7 @@ class ArdMediathek(Screen):
             if js.get("duration") or js.get("type") in ("live", "event", "broadcastMainClip"):
                 liste.append(("PLAY", ensure_str(title), ensure_str(url2), ensure_str(plot), ensure_str(img), duration))
             elif js.get("type") == "region_gridlist":
-                liste.append(("WEITER", ensure_str(title) + " " + config.plugins.ARD.Region.value, ensure_str(API_URL + "widgets/ard/region/6YgzSO0C7huVaGgzM5mq19/%s?pageNumber=0&pageSize=100&embedded=true") % config.plugins.ARD.Region.value, ensure_str(plot), img, duration))
+                liste.append(("WEITER", ensure_str(title) + " " + config.plugins.ARD.Region.value.upper(), ensure_str(url2.replace('{regionId}', config.plugins.ARD.Region.value)), ensure_str(plot), img, duration))
             else:
                 liste.append(("WEITER", ensure_str(title), ensure_str(url2), ensure_str(plot), ensure_str(img), duration))
         if "grouping" in url and data.get("widgets"):
@@ -458,15 +460,15 @@ class ArdMediathek(Screen):
                 liste.append(("m3u8 | %s" % res, url))
         liste = sortList(liste)
         if config.plugins.ARD.AUTOPLAY.value and liste:
-            self.Play2(liste[0])
+            self.Player(liste[0])
         elif len(liste) > 1:
-            self.session.openWithCallback(self.Play2, ChoiceBox, title="Wiedergabe starten?", list=liste)
+            self.session.openWithCallback(self.Player, ChoiceBox, title="Wiedergabe starten?", list=liste)
         elif liste:
-            self.Play2(liste[0])
+            self.Player(liste[0])
         else:
             self.session.open(MessageBox, "Kein Eintrag vorhanden", MessageBox.TYPE_INFO)
 
-    def Play2(self, url):
+    def Player(self, url):
         url = url and url[1]
         if url:
             sref = eServiceReference(4097, 0, ensure_str(url))
@@ -508,28 +510,28 @@ class ArdMediathek(Screen):
         if self["movielist"].getCurrent() is not None:
             url = self["movielist"].getCurrent()[4]
             if url.startswith("http"):
-                callInThread(self.getimage, url)
+                callInThread(self.getimage, url, self["movielist"].getIndex())
             elif url.startswith("/usr/"):
                 self.get_cover(url)
             else:
                 img = PLUGINPATH + "/img/nocover.png"
                 self.get_cover(img)
 
-    def getimage(self, url):
+    def getimage(self, url, index=0):
         try:
             data = geturl(url)
             with open(TMPIC, "wb") as f:
                 f.write(data)
-            self.get_cover(TMPIC)
+            if index == int(self["movielist"].getIndex()):
+                self.get_cover(TMPIC)
         except OSError:
             pass
 
     def get_cover(self, img):
         picload = ePicLoad()
         self["cover"].instance.setPixmap(gPixmapPtr())
-        scale = AVSwitch().getFramebufferScale()
         size = self["cover"].instance.size()
-        picload.setPara((size.width(), size.height(), scale[0], scale[1], False, 1, "#FF000000"))
+        picload.setPara((size.width(), size.height(), 1, 1, False, 1, "#FF000000"))
         if picload.startDecode(img, 0, 0, False) == 0:
             ptr = picload.getData()
             if ptr is not None:
@@ -551,8 +553,8 @@ class MoviePlayer2(MoviePlayer):
         pass
 
     def leavePlayer(self):
-        if config.plugins.ARD.SaveResumePoint.value:
-            setResumePoint(self.session)
+        if config.plugins.ARD.SaveResumePoint.value and hasattr(InfoBarGenerics, "setResumePoint"):
+            InfoBarGenerics.setResumePoint(self.session)
         self.close()
 
     def leavePlayerOnExit(self):
@@ -577,7 +579,10 @@ class ARDConfigScreen(ConfigListScreen, Screen):
         self.ConfigList()
 
     def ConfigList(self):
-        self["config"].list = [getConfigListEntry("Skin", config.plugins.ARD.SkinColor), getConfigListEntry("Download-Verzeichnis:", config.plugins.ARD.savetopath), getConfigListEntry("Untertitle Downloaden", config.plugins.ARD.UT_DL), getConfigListEntry("Cover Downloaden", config.plugins.ARD.COVER_DL), getConfigListEntry("Handlung Downloaden", config.plugins.ARD.DESC), getConfigListEntry("Letzte Abspielposition speichern", config.plugins.ARD.SaveResumePoint), getConfigListEntry("Unsere Region", config.plugins.ARD.Region), getConfigListEntry("AutoPlay", config.plugins.ARD.AUTOPLAY)]
+        self.list = [getConfigListEntry("Skin (Neustart des Plugins erforderlich)", config.plugins.ARD.SkinColor), getConfigListEntry("Download-Verzeichnis:", config.plugins.ARD.savetopath), getConfigListEntry("Untertitle Downloaden", config.plugins.ARD.UT_DL), getConfigListEntry("Cover Downloaden", config.plugins.ARD.COVER_DL), getConfigListEntry("Handlung Downloaden", config.plugins.ARD.DESC), getConfigListEntry("Unsere Region", config.plugins.ARD.Region), getConfigListEntry("AutoPlay Beste Qualität", config.plugins.ARD.AUTOPLAY)]
+        if hasattr(InfoBarGenerics, "setResumePoint"):
+            self.list.append(getConfigListEntry("Letzte Abspielposition speichern", config.plugins.ARD.SaveResumePoint))
+        self["config"].list = self.list
 
     def save(self):
         self.keySave()
